@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Promillerechner mit Diagramm</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e7f3fe;
+            border-radius: 4px;
+        }
+        #chartContainer {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Promillerechner mit Diagramm</h1>
+        <form id="alcoholForm">
+            <label for="weight">Gewicht (kg):</label>
+            <input type="number" id="weight" required min="30" max="200">
+            
+            <label for="height">Größe (cm):</label>
+            <input type="number" id="height" required min="100" max="250">
+            
+            <label for="gender">Geschlecht:</label>
+            <select id="gender" required>
+                <option value="male">Männlich</option>
+                <option value="female">Weiblich</option>
+            </select>
+            
+            <label for="duration">Dauer des Konsums (Stunden):</label>
+            <input type="number" id="duration" required min="0" step="0.5">
+            
+            <label for="beerVolume">Bier (Liter):</label>
+            <input type="number" id="beerVolume" min="0" step="0.1">
+            
+            <label for="wineVolume">Wein (Liter):</label>
+            <input type="number" id="wineVolume" min="0" step="0.1">
+            
+            <label for="spiritsVolume">Spirituosen (Liter):</label>
+            <input type="number" id="spiritsVolume" min="0" step="0.1">
+            
+            <button type="submit">Berechnen</button>
+        </form>
+        
+        <div id="result"></div>
+        <div id="chartContainer">
+            <canvas id="bakChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let bakChart;
+
+        document.getElementById('alcoholForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const weight = parseFloat(document.getElementById('weight').value);
+            const height = parseFloat(document.getElementById('height').value);
+            const gender = document.getElementById('gender').value;
+            const duration = parseFloat(document.getElementById('duration').value);
+            const beerVolume = parseFloat(document.getElementById('beerVolume').value) || 0;
+            const wineVolume = parseFloat(document.getElementById('wineVolume').value) || 0;
+            const spiritsVolume = parseFloat(document.getElementById('spiritsVolume').value) || 0;
+            
+            // Alkoholgehalt in g/100ml
+            const beerAlcohol = 5;
+            const wineAlcohol = 12;
+            const spiritsAlcohol = 40;
+            
+            // Berechnung der Alkoholmenge in Gramm
+            const alcoholGrams = (beerVolume * 1000 * beerAlcohol / 100 * 0.8) +
+                                 (wineVolume * 1000 * wineAlcohol / 100 * 0.8) +
+                                 (spiritsVolume * 1000 * spiritsAlcohol / 100 * 0.8);
+            
+            // Berechnung des Reduktionsfaktors nach Seidl et al.
+            let r;
+            if (gender === 'male') {
+                r = 0.31608 - 0.004821 * weight + 0.004432 * height;
+            } else {
+                r = 0.31223 - 0.006446 * weight + 0.004466 * height;
+            }
+            
+            // Berechnung der theoretischen BAK
+            let maxBak = alcoholGrams / (weight * r);
+            
+            // Abzug des Resorptionsdefizits (15%)
+            maxBak -= maxBak * 0.15;
+            
+            // Berechnung des BAK-Verlaufs
+            const bakData = [];
+            const timeLabels = [];
+            for (let hour = 0; hour <= duration + 12; hour += 0.5) {
+                let bak = maxBak - (hour * 0.15);
+                bak = Math.max(0, bak);
+                bakData.push(bak);
+                timeLabels.push(hour);
+            }
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `
+                <h2>Ergebnis:</h2>
+                <p>Ihre berechnete maximale Blutalkoholkonzentration beträgt: ${maxBak.toFixed(2)} ‰</p>
+                <p>Nach ${duration} Stunden beträgt Ihre Blutalkoholkonzentration: ${bakData[Math.floor(duration * 2)].toFixed(2)} ‰</p>
+                <p><strong>Wichtiger Hinweis:</strong> Diese Berechnung dient nur zur Orientierung und ersetzt keine medizinische oder rechtliche Beurteilung. Die tatsächliche Blutalkoholkonzentration kann individuell abweichen.</p>
+            `;
+            
+            // Erstellen oder Aktualisieren des Diagramms
+            if (bakChart) {
+                bakChart.destroy();
+            }
+            
+            const ctx = document.getElementById('bakChart').getContext('2d');
+            bakChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timeLabels,
+                    datasets: [{
+                        label: 'Blutalkoholkonzentration (‰)',
+                        data: bakData,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Zeit (Stunden)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'BAK (‰)'
+                            },
+                            min: 0
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
